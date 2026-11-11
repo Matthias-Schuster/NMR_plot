@@ -162,9 +162,14 @@ pf.overlay_1d(p, [6, 7], name="1H_overlay")            # last index on top
 pf.stack_1d(p, [6, 7], name="1H_stack")                # vertically offset, names next to the spectra
 pf.stack_1d(p, [6, 7], name="1H_3D", shift=0.1, names="legend")  # with horizontal shift
 pf.grid_plot_1d(p, row=2, col=1)                       # all 1D spectra in a grid
+pf.grid_plot_over_xp_1d(p, overlay_groups=[[6], [6, 7]], row=2, col=1, titles=["A", "A + B"])
 ```
 
-Normalisation (`normalize` in the parameter section): `None`, `"max"` (highest peak in the shown range), `"region"` (highest peak in `norm_region`) or `"ns"` (divides by NS × RG).
+Normalisation (`normalize` in the parameter section, or `normalize=...` in a single plot call):
+* `None`: raw intensities
+* `"max"`: the highest peak in the shown range is set to 1
+* `(0.1, -0.1)`: the highest peak in this ppm range is set to 1 (reference signal, e.g. DSS)
+* `"ns"`: divides by NS × RG (number of scans × receiver gain, read from the `acqus` file of each experiment). Use it to compare absolute intensities of spectra recorded with different NS or RG under otherwise identical conditions.
 
 ## 🏷️ Peak Labels via CSV (Optional)
 You can automatically annotate your NMR spectra with peak labels by providing a CSV file for each spectrum (1D and 2D spectra). Set `peak_labels = True` to show them.
@@ -193,7 +198,7 @@ Once your CSV is in the input_csv/MyProtein/ folder, just ensure the filename ma
 You can fine-tune your figures in the SETUP PARAMETERS section of your plot script (all defaults are listed in `nmr_setup.py`):
 * Contour adjustments: Change lines (number of contour levels) and factor (spacing between levels).
 * Negative contours: Give a pair of colors (e.g. `["tab:blue", "tab:orange"]`) in the data list to render negative intensities as dashed lines in the second color.
-* 1D spectra: `normalize`, `norm_region`, `stack_offset` and `label_rotation_1d`.
+* 1D spectra: `normalize`, `stack_offset` and `label_rotation_1d`.
 * Projections: `proj_size` and `proj_line_width`.
 * Typography: Toggle the Arial flag to easily switch between sans-serif (Arial) and serif (Times New Roman) fonts.
 * Exporting: Set save_png = True or save_svg = True. (Note: SVG generation is significantly slower for contour-heavy NMR spectra).

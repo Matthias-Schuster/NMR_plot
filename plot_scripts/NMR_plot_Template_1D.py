@@ -42,8 +42,10 @@ alpha = 0.7             # transparency in overlay_1d
 legend = True           # visibility of the legend in overlay plots
 
 # NORMALISATION AND STACKING
-normalize = None        # None, "max" (highest peak in xlim), "region" (norm_region) or "ns" (NS*RG)
-norm_region = None      # e.g. (0.1, -0.1) for normalize = "region" (reference signal)
+normalize = None        # None: raw intensities
+                        # "max": highest peak in xlim = 1
+                        # (0.1, -0.1): highest peak in this ppm range = 1 (reference signal, e.g. DSS)
+                        # "ns": divided by NS*RG (scans x receiver gain, read from acqus)
 stack_offset = 1.0      # vertical distance in stack_1d (1 = height of the highest peak)
 
 # GRIDPLOT PARAMETERS
@@ -185,17 +187,25 @@ if False:
     pf.grid_plot_1d(p, row=4, col=1)
     pf.grid_plot_1d(p, indices=[0, 1], row=1, col=2, name="grid_pair", sharey=True)
 
-# %% NORMALISATION
-# -- compare intensities: by the highest peak, by a reference signal or by NS*RG --
+# %% GRID: CUSTOM OVERLAY GROUPS
+# -- every panel shows its own overlay group, titles are optional --
 if False:
-    p["normalize"] = "max"
-    pf.overlay_1d(p, [0, 1], name="over_norm_max")
+    pf.grid_plot_over_xp_1d(
+        p,
+        row=3,
+        col=1,
+        overlay_groups=[
+            [0, 1],
+            [0, 2],
+            [0, 3],
+        ],
+        titles=["Protein 2", "Protein 3", "Protein 4"],
+        sharey=True,
+    )
 
-    p["normalize"] = "region"
-    p["norm_region"] = (0.1, -0.1)
-    pf.overlay_1d(p, [0, 1], name="over_norm_ref")
-
-    p["normalize"] = "ns"
-    pf.overlay_1d(p, [0, 1], name="over_norm_ns")
-
-    p["normalize"] = None
+# %% NORMALISATION
+# -- normalize=... changes the normalisation for this one plot (works in all 1D functions) --
+if False:
+    pf.overlay_1d(p, [0, 1], name="over_norm_max", normalize="max")
+    pf.overlay_1d(p, [0, 1], name="over_norm_ref", normalize=(0.1, -0.1))
+    pf.overlay_1d(p, [0, 1], name="over_norm_ns", normalize="ns")

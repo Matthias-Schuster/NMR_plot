@@ -12,6 +12,7 @@ and switchable spectra styles (SPECTRA_STYLES / set_style).
 """
 
 import contextlib
+import functools
 import os
 import warnings
 from pathlib import Path
@@ -360,9 +361,16 @@ def _new_grid(p, row, col, sharex=True, sharey=True, ylabel=True, suplabels=True
     return fig, np.atleast_1d(axes).flatten()
 
 
-def _add_legend(ax, handles, names, p):
+def _add_legend(ax, handles, names, p, anchor=None):
     if handles and p.get("legend", True):
-        leg = ax.legend(handles, names, loc="upper left", framealpha=0.8, handlelength=1.5)
+        leg = ax.legend(
+            handles,
+            names,
+            loc="upper left",
+            bbox_to_anchor=anchor,
+            framealpha=0.8,
+            handlelength=1.5,
+        )
         for line in leg.get_lines():
             line.set_linewidth(2.0)
 
@@ -1246,23 +1254,57 @@ def _scale_factor(value):
     return factor if np.isfinite(factor) and factor != 0 else 1.0
 
 
+_UNSET = object()  # "argument not given" (None already means "no normalisation")
+
+
+@contextlib.contextmanager
+def _normalisation(p, normalize):
+    """Temporarily uses 'normalize' instead of p["normalize"] (if given)."""
+    if normalize is _UNSET:
+        yield
+        return
+    previous = p.get("normalize")
+    p["normalize"] = normalize
+    try:
+        yield
+    finally:
+        p["normalize"] = previous
+
+
+def _accepts_normalize(func):
+    """Adds the keyword normalize=... to a 1D plot function (overrides p["normalize"])."""
+
+    @functools.wraps(func)
+    def wrapper(p, *args, normalize=_UNSET, **kwargs):
+        with _normalisation(p, normalize):
+            return func(p, *args, **kwargs)
+
+    return wrapper
+
+
 def _norm_reference(p, idx, ppm, y, mode, region):
-    if mode == "ns":
+    if isinstance(mode, str) and mode == "ns":
+        # NS (number of scans) and RG (receiver gain) from the acqus file of the experiment
         acqus = p["dic_all"][idx].get("acqus", {})
         reference = float(acqus.get("NS", 1)) * float(acqus.get("RG", 1))
         return reference if reference > 0 else 1.0
 
-    if mode == "max":
+    if isinstance(mode, (tuple, list)):
+        limits = mode  # ppm range of a reference signal, e.g. (0.1, -0.1)
+    elif mode == "max":
         limits = region
-    elif mode == "region":
+    elif mode == "region":  # older style: range in p["norm_region"]
         limits = p.get("norm_region")
         if limits is None:
             raise ValueError("normalize='region' needs norm_region=(ppm_high, ppm_low).")
     else:
-        raise ValueError(f"Unknown normalize='{mode}'. Use None, 'max', 'region' or 'ns'.")
+        raise ValueError(
+            f"Unknown normalize={mode!r}. Use None, 'max', 'ns' or a ppm range like (0.1, -0.1)."
+        )
 
     mask = _in_range(ppm, limits)
     if not mask.any():
+        print(f"  -> Warning: normalisation range {tuple(limits)} is outside of spectrum [{idx}].")
         return 1.0
     reference = float(y[mask].max())
     if reference <= 0:
@@ -1274,8 +1316,10 @@ def get_1d(p, idx, region=None):
     """
     Returns (ppm, intensity) of a 1D spectrum after normalisation and scaling.
 
-    p["normalize"]: None, "max" (highest point in 'region', default xlim),
-                    "region" (highest point in p["norm_region"]) or "ns" (NS * RG).
+    p["normalize"]: None   no normalisation
+                    "max"  highest point in 'region' (default: xlim) = 1
+                    "ns"   divided by NS * RG (scans x receiver gain from acqus)
+                    (high, low)  highest point in this ppm range = 1 (reference signal)
     The 'contour' column of the data list is applied afterwards as scaling factor.
     """
     dic, data = p["dic_all"][idx], p["data_all"][idx]
@@ -1283,7 +1327,7 @@ def get_1d(p, idx, region=None):
     y = np.real(data).astype(float)
 
     mode = p.get("normalize")
-    if mode:
+    if mode is not None and mode is not False:
         y = y / _norm_reference(p, idx, ppm, y, mode, region if region is not None else p["xlim"])
 
     return ppm, y * _scale_factor(p["cont"][idx])
@@ -1411,8 +1455,13 @@ def _finish_1d(ax, p, traces, ylim=None):
         adjust_labels_1d(ax, texts, xs, ys, p)
 
 
+@_accepts_normalize
 def plot_everything_1d(p):
-    """Plots every loaded 1D spectrum individually (folder '1D')."""
+    """Plots every loaded 1D spectrum individually (folder '1D').
+
+    All 1D plot functions accept normalize=None / "max" / "ns" / (high, low)
+    to override p["normalize"] for this plot only.
+    """
     _check_style(p, _KEYS_1D, "plot_everything_1d", ylabel=False)
     folder = p["out_1d"]
     result_folder(folder)
@@ -1426,6 +1475,7 @@ def plot_everything_1d(p):
         save_and_clear(fig, folder, f"{p['file_names'][idx]}", p)
 
 
+@_accepts_normalize
 def overlay_1d(p, get, name):
     """Overlays the 1D spectra 'get' (list of indices); the last one is on top."""
     _check_style(p, _KEYS_1D, "overlay_1d", ylabel=False)
@@ -1447,6 +1497,7 @@ def overlay_1d(p, get, name):
     save_and_clear(fig, folder, f"overlay_{name}", p)
 
 
+@_accepts_normalize
 def stack_1d(p, get, name, offset=None, shift=0.0, names="text"):
     """
     Stacked 1D plot: the first index is at the bottom, the last one on top.
@@ -1499,6 +1550,7 @@ def stack_1d(p, get, name, offset=None, shift=0.0, names="text"):
     save_and_clear(fig, folder, f"stack_{name}", p)
 
 
+@_accepts_normalize
 def grid_plot_1d(p, indices=None, row=2, col=1, name="grid_1D", sharey=False):
     """
     Plots 1D spectra in a row x col grid with a common ppm axis.
@@ -1532,6 +1584,48 @@ def grid_plot_1d(p, indices=None, row=2, col=1, name="grid_1D", sharey=False):
         apply_formatting_1d(ax, p, title=p["file_names"][idx], is_grid=True, add_labels=bottom)
         _plot_traces(ax, p, [traces[idx]])
         _finish_1d(ax, p, [traces[idx]], ylim=common_ylim)
+
+    save_and_clear(fig, folder, name, p)
+
+
+@_accepts_normalize
+def grid_plot_over_xp_1d(
+    p, overlay_groups, row=2, col=1, name="grid_over_xp_1D", titles=None, sharey=False
+):
+    """
+    1D grid in which every panel shows its own overlay group (list of index lists).
+    titles: optional list with one title per panel. sharey=True uses one intensity scale.
+    """
+    _check_style(p, _KEYS_1D, "grid_plot_over_xp_1d", ylabel=False)
+    groups = [_valid(p, group, 1) for group in overlay_groups]
+    if not any(groups):
+        print("  -> Error: No valid 1D spectra found.")
+        return
+
+    folder = p["out_1d"]
+    result_folder(folder)
+
+    fig, axes = _new_grid(p, row, col, sharex=True, sharey=sharey, suplabels=False)
+    panels = list(_zip_axes(axes, groups))
+    traces = {k: [_trace(p, idx) for idx in group] for k, (_, group) in enumerate(panels) if group}
+
+    common_ylim = None
+    if sharey:
+        everything = [t for group in traces.values() for t in group]
+        common_ylim = _ylim_1d(p, everything, _traces_have_labels(p, everything))
+
+    for k, (ax, group) in enumerate(panels):
+        if not group:
+            ax.axis("off")
+            continue
+        title = titles[k] if titles and k < len(titles) else None
+        bottom = ax.get_subplotspec().is_last_row()
+        apply_formatting_1d(ax, p, title=title, is_grid=True, add_labels=bottom)
+        handles, names = _plot_traces(ax, p, traces[k], alpha=p["alpha"])
+        _finish_1d(ax, p, traces[k], ylim=common_ylim)
+        # Legend top left; below the panel title if there is one
+        anchor = (0.0, p.get("title_y", 0.88) - 0.02) if title and p.get("titles", True) else None
+        _add_legend(ax, handles, names, p, anchor=anchor)
 
     save_and_clear(fig, folder, name, p)
 

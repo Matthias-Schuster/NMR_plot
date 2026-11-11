@@ -76,8 +76,7 @@ cycles = 10             # number of peak and text avoiding cycles
 iterations = 10         # iterations for each cycle
 
 # 1D PARAMETERS
-normalize = None        # None, "max" (highest peak in xlim), "region" (norm_region) or "ns" (NS*RG)
-norm_region = None      # e.g. (0.1, -0.1) for normalize = "region" (reference signal)
+normalize = None        # None, "max" (highest peak in xlim), (0.1, -0.1) (reference signal) or "ns" (NS*RG)
 stack_offset = 1.0      # vertical distance in stack_1d (1 = height of the highest peak)
 label_rotation_1d = 90  # rotation of the 1D peak labels
 
@@ -360,3 +359,5 @@ if False:
     pf.stack_1d(p, [6, 7], name="1H_stack")                        # names next to the spectra
     pf.stack_1d(p, [6, 7], name="1H_stack_3D", shift=0.1, names="legend")
     pf.grid_plot_1d(p, row=2, col=1)                               # all 1D spectra
+    pf.grid_plot_over_xp_1d(p, overlay_groups=[[6], [6, 7]], row=2, col=1, titles=["A", "A + B"])
+    pf.overlay_1d(p, [6, 7], name="1H_overlay_norm", normalize="max")  # normalisation for one plot
