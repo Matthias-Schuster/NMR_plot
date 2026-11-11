@@ -2,6 +2,84 @@ from pathlib import Path
 import sys
 
 
+# Output sub-folders inside results/<project>/
+OUTPUT_FOLDERS = {
+    "out_single": "single",
+    "out_overlay": "overlay",
+    "out_grid": "grid",
+    "out_strip": "strips",
+    "out_1d": "1D",
+}
+
+# Default values of all plot parameters.
+# A variable with the same name in the plot script overrides the default.
+DEFAULTS = {
+    # Output
+    "dpi": 300,
+    "save_png": True,
+    "save_svg": False,
+    # Figure size (inch, or size of one panel in grid plots)
+    "xsize": 5,
+    "ysize": 4,
+    # Contours
+    "lines": 25,
+    "factor": 1.2,
+    "alpha": 0.7,
+    # Axes, titles, legend
+    "labelpad_x": -8,
+    "labelpad_y": 9,
+    "titles": True,
+    "first_x": True,
+    "first_y": True,
+    "legend": True,
+    # Grid plots
+    "title_y": 0.88,
+    "grid_x": 0.05,
+    "grid_y": 0.06,
+    # Peak labels
+    "peak_labels": False,
+    "label_fontsize": 4,
+    "connector_width": 0.5,
+    "show_ellipse": False,
+    "peak_ellipse_x": 0.06,
+    "peak_ellipse_y": 0.6,
+    "starting_angle": 42,
+    "random_seed": 42,
+    "jitter": 0.3,
+    "cycles": 10,
+    "iterations": 10,
+    # 1D spectra
+    "normalize": None,
+    "norm_region": None,
+    "stack_offset": 1.0,
+    "label_offset_1d": 0.04,
+    "label_rotation_1d": 90,
+    "label_window_1d": 0.02,
+    "label_headroom_1d": 0.3,
+    # 2D with projections
+    "proj_size": 0.2,
+    "proj_line_width": 0.5,
+}
+
+# Parameters that normally come from SPECTRA_STYLES via set_style()
+STYLE_KEYS = (
+    "xlim",
+    "ylim",
+    "x_label",
+    "y_label",
+    "y_label_grid",
+    "xticks",
+    "xminorticks",
+    "yticks",
+    "yminorticks",
+    "line_width",
+    "ylim_1d",
+)
+
+# Loaded data and the columns of the data list
+DATA_KEYS = ("dic_all", "data_all", "files", "file_names", "cont", "colors")
+
+
 def setup_nmr_project(
     script_file,
     prefix="NMR_plot_",
@@ -35,34 +113,23 @@ def setup_nmr_project(
 
     # Extract project name from filename
     script_name = script_path.stem
-
-    if script_name.startswith(prefix):
-        project_name = script_name[len(prefix):]
-    else:
-        project_name = script_name
+    project_name = script_name[len(prefix):] if script_name.startswith(prefix) else script_name
 
     # Define paths
     project_out = root_dir / results_folder / project_name
-
-    # Group paths in a dictionary
     paths = {
         "script_dir": script_dir,
         "root_dir": root_dir,
         "project_out": project_out,
-        "out_single": project_out / "single",
-        "out_overlay": project_out / "overlay",
-        "out_grid": project_out / "grid",
-        "out_strip": project_out / "strips",
         "csv_dir": root_dir / csv_folder / project_name,
     }
+    for key, folder in OUTPUT_FOLDERS.items():
+        paths[key] = project_out / folder
 
     # Create output folders
     if create_output_dirs:
-        paths["out_single"].mkdir(parents=True, exist_ok=True)
-        paths["out_overlay"].mkdir(parents=True, exist_ok=True)
-        paths["out_grid"].mkdir(parents=True, exist_ok=True)
-        paths["out_strip"].mkdir(parents=True, exist_ok=True)
-        paths["csv_dir"].mkdir(parents=True, exist_ok=True)
+        for key in (*OUTPUT_FOLDERS, "csv_dir"):
+            paths[key].mkdir(parents=True, exist_ok=True)
 
     if verbose:
         print("\n----- NMR Project Setup -----")
@@ -78,66 +145,22 @@ def setup_nmr_project(
 
 def build_plot_dict(**kwargs):
     """
-    Builds the 'p' dictionary from the local variables of the main script.
+    Builds the 'p' dictionary from the local variables of the main script
+    (called as build_plot_dict(**locals())). Missing variables get their DEFAULTS.
     """
-    paths = kwargs.get("paths", {})
+    paths = kwargs.get("paths") or {}
 
-    p = {
-        "spectra_type": kwargs.get("spectra_type"),
-        "dic_all": kwargs.get("dic_all"),
-        "data_all": kwargs.get("data_all"),
-        "files": kwargs.get("files"),
-        "file_names": kwargs.get("file_names"),
-        "cont": kwargs.get("cont"),
-        "colors": kwargs.get("colors"),
-        # Pull parameters determined by your spectra_type if/elif block
-        "xlim": kwargs.get("xlim"),
-        "ylim": kwargs.get("ylim"),
-        "x_label": kwargs.get("x_label"),
-        "y_label": kwargs.get("y_label"),
-        "y_label_grid": kwargs.get("y_label_grid"),
-        "xticks": kwargs.get("xticks"),
-        "xminorticks": kwargs.get("xminorticks"),
-        "yticks": kwargs.get("yticks"),
-        "yminorticks": kwargs.get("yminorticks"),
-        "line_width": kwargs.get("line_width"),
-        # Pull all your other manual settings
-        "dpi": kwargs.get("dpi", 300),
-        "xsize": kwargs.get("xsize", 5),
-        "ysize": kwargs.get("ysize", 4),
-        "lines": kwargs.get("lines", 25),
-        "factor": kwargs.get("factor", 1.2),
-        "labelpad_x": kwargs.get("labelpad_x", -8),
-        "labelpad_y": kwargs.get("labelpad_y", 9),
-        "title_y": kwargs.get("title_y", 0.88),
-        "grid_x": kwargs.get("grid_x", 0.05),
-        "grid_y": kwargs.get("grid_y", 0.06),
-        "titles": kwargs.get("titles", True),
-        "labels": kwargs.get("axis_labels", True),
-        "alpha": kwargs.get("alpha", 0.7),
-        "negative": kwargs.get("negative", False),
-        "neg_color": kwargs.get("neg_color", "magenta"),
-        "save_svg": kwargs.get("save_svg", False),
-        "save_png": kwargs.get("save_png", True),
-        "first_x": kwargs.get("first_x", True),
-        "first_y": kwargs.get("first_y", True),
-        "legend": kwargs.get("legend", True),
-        "peak_labels": kwargs.get("peak_labels", True),
-        "csv_files": kwargs.get("csv_files", []),
-        "label_fontsize": kwargs.get("label_fontsize", 4),
-        "csv_dir": paths.get("csv_dir", ""),
-        "out_single": paths.get("out_single", ""),
-        "out_grid": paths.get("out_grid", ""),
-        "out_overlay": paths.get("out_overlay", ""),
-        "out_strip": paths.get("out_strip", ""),
-        "peak_ellipse_x": kwargs.get("peak_ellipse_x", 0.08),
-        "peak_ellipse_y": kwargs.get("peak_ellipse_y", 0.8),
-        "show_ellipse": kwargs.get("show_ellipse", True),
-        "starting_angle": kwargs.get("starting_angle", 0.0),
-        "random_seed": kwargs.get("random_seed", 42),
-        "cycles": kwargs.get("cycles", 10),
-        "iterations": kwargs.get("iterations", 10),
-        "connector_width": kwargs.get("connector_width", 0.5),
-    }
+    p = {key: kwargs.get(key, default) for key, default in DEFAULTS.items()}
+    p.update({key: kwargs.get(key) for key in STYLE_KEYS})
+    p.update({key: kwargs.get(key) for key in DATA_KEYS})
+
+    p["labels"] = kwargs.get("axis_labels", True)
+    p["csv_files"] = kwargs.get("csv_files", [])
+    p["spectra_type"] = kwargs.get("spectra_type")  # older scripts set it directly
+    p["SPECTRA_STYLES"] = kwargs.get("SPECTRA_STYLES")
+
+    p["csv_dir"] = paths.get("csv_dir", "")
+    for key in OUTPUT_FOLDERS:
+        p[key] = paths.get(key, "")
 
     return p

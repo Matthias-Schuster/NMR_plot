@@ -2,7 +2,7 @@ old/
 results/
 input_csv/
 plot_scripts/*
-!plot_scripts/NMR_plot_Template.py
+!plot_scripts/NMR_plot_Template_*.py
 !plot_scripts/nmr_setup.py
 
 *.csv

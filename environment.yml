@@ -1,4 +1,4 @@
-name: NMR_2D_plot
+name: NMR_plot
 channels:
   - conda-forge
   - nodefaults
@@ -6,8 +6,9 @@ dependencies:
   - python >=3.12
   - numpy
   - pandas
-  - matplotlib
-  - adjustText
+  - matplotlib >=3.8
+  - contourpy >=1.0
+  - adjustText >=1.1
   - pip
   - pip:
     - nmrglue
